@@ -1,0 +1,25 @@
+name: web-ci
+
+on:
+  pull_request:
+    paths:
+      - "apps/studio-web/**"
+      - "package.json"
+      - ".github/workflows/web-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/studio-web/**"
+      - "package.json"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm run typecheck:web
+      - run: npm run build:web

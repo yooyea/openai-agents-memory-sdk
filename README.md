@@ -1,8 +1,68 @@
-# OpenAI Agents Memory SDK
+# Agent Studio Monorepo
+
+一个轻量、可自托管的智能体创建与会话平台。
+
+用户可以创建、编辑、调试和发布智能体，并通过内置会话页面在生产环境中持续、有记忆地使用已发布版本。
+
+当前仓库包含两个部分：
+
+```text
+openai-agents-memory-sdk/
+├── apps/
+│   └── studio-web/              # 智能体管理与生产会话站点
+├── src/openai_agents_memory/    # OpenAI Agents SDK 长期记忆扩展
+├── tests/                       # Memory SDK 单元测试
+├── migrations/                  # PostgreSQL + pgvector 表结构
+└── examples/                    # SDK 最小示例
+```
+
+## 产品闭环
+
+```text
+创建智能体
+→ 编辑 Prompt / 模型 / Tool / Memory
+→ 调试草稿
+→ 发布不可变版本
+→ 部署为生产版本
+→ 用户进入会话页面
+→ 创建或恢复 Session
+→ 召回跨 Session 长期记忆
+→ 持续聊天
+```
+
+## Studio Web
+
+站点当前是一个可交互的前端产品原型，覆盖：
+
+- 工作台与运行概览
+- 智能体列表
+- 智能体创建与编辑
+- Prompt、模型、MCP、Memory 和版本配置
+- 生产智能体选择页
+- 历史会话与聊天页面
+- Session 恢复和长期记忆反馈展示
+- 响应式桌面与移动端布局
+
+### 启动站点
+
+```bash
+npm install
+npm run dev:web
+```
+
+访问 `http://localhost:3000`。
+
+站点当前使用本地 Mock 数据。后续会分别接入：
+
+- `control-api`：Agent 草稿、版本、发布与部署
+- `runtime-api`：Session、流式消息、Tool Call、Memory 与 Run
+- `agent-memory-sdk`：长期记忆提取、召回与上下文注入
+
+## OpenAI Agents Memory SDK
 
 基于 **OpenAI Agents SDK** 的轻量长期记忆扩展。
 
-项目不 Fork OpenAI Agents SDK，也不引入完整 Agent 平台。OpenAI Agents SDK 继续负责 Agent Loop、Tool、Handoff、Streaming、Session 与 Compaction；本项目只补齐：
+项目不 Fork OpenAI Agents SDK。OpenAI Agents SDK 继续负责 Agent Loop、Tool、Handoff、Streaming、Session 与 Compaction；本项目补齐：
 
 - `tenant_id / agent_id / user_id / session_id` 身份与隔离模型
 - 跨 Session 的长期用户记忆
@@ -12,9 +72,7 @@
 - 同步与后台提取策略
 - 面向业务的一体化 `MemoryRunner`
 
-> 当前状态：MVP 骨架。接口和数据模型已就位，适合继续补集成测试、Redis Streams Publisher 和生产治理。
-
-## 设计原则
+### 设计原则
 
 1. **不 Fork**：只使用 OpenAI Agents SDK 公开扩展点。
 2. **Session 与 Memory 分离**：Session 保存当前对话历史，Memory 保存跨会话稳定事实。
@@ -23,7 +81,7 @@
 5. **默认少记**：不保存密码、令牌、身份证件、财务账户等敏感信息。
 6. **可删除、可过期、可追溯**：记忆带来源、置信度和过期时间。
 
-## 架构
+### SDK 架构
 
 ```text
 Business Application
@@ -32,7 +90,7 @@ Business Application
 MemoryRunner
   |-- SessionFactory ------> OpenAI Agents SDK SQLAlchemySession
   |-- MemoryStore ---------> PostgreSQL + pgvector
-  |-- MemoryExtractor -----> OpenAI Agents SDK structured-output Agent
+  |-- MemoryExtractor -----> Structured-output Agent
   |-- ContextInjector -----> RunConfig.call_model_input_filter
   `-- JobPublisher --------> Redis Streams / Queue（可选）
         |
@@ -40,102 +98,18 @@ MemoryRunner
 OpenAI Agents SDK Runner
 ```
 
-## 快速开始
-
-### 1. 启动 PostgreSQL
+### SDK 快速开始
 
 ```bash
 docker compose up -d
-```
-
-### 2. 安装
-
-```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-```
-
-### 3. 初始化记忆表
-
-```bash
 psql "$DATABASE_URL" -f migrations/001_init.sql
-```
-
-OpenAI Agents SDK 的 Session 表可以由 `SQLAlchemySession(create_tables=True)` 首次自动创建。
-
-### 4. 配置环境变量
-
-```bash
-cp .env.example .env
-export OPENAI_API_KEY="..."
-export DATABASE_URL="postgresql+asyncpg://postgres:postgres@localhost:5432/agent_memory"
-```
-
-### 5. 运行示例
-
-```bash
 python examples/basic.py
 ```
 
-## 最小使用方式
-
-```python
-from agents import Agent
-
-from openai_agents_memory import (
-    AgentIdentity,
-    ContextPolicy,
-    ExtractionMode,
-    MemoryPolicy,
-    MemoryRunner,
-    OpenAIAgentMemoryExtractor,
-    OpenAIEmbeddingProvider,
-    PostgresMemoryStore,
-    SQLAlchemySessionFactory,
-)
-
-identity = AgentIdentity(
-    tenant_id="tenant-001",
-    agent_id="assistant",
-    user_id="user-001",
-    session_id="session-001",
-)
-
-store = PostgresMemoryStore(
-    database_url="postgresql+asyncpg://postgres:postgres@localhost:5432/agent_memory",
-    embedding_provider=OpenAIEmbeddingProvider(),
-)
-
-runner = MemoryRunner(
-    store=store,
-    extractor=OpenAIAgentMemoryExtractor(model="gpt-5-mini"),
-    session_factory=SQLAlchemySessionFactory(
-        database_url="postgresql+asyncpg://postgres:postgres@localhost:5432/agent_memory",
-        create_tables=True,
-        enable_compaction=True,
-    ),
-    memory_policy=MemoryPolicy(extraction_mode=ExtractionMode.INLINE),
-    context_policy=ContextPolicy(max_memory_items=8),
-)
-
-agent = Agent(
-    name="assistant",
-    model="gpt-5-mini",
-    instructions="你是一个简洁、可靠的技术助手。",
-)
-
-result = await runner.run(
-    agent=agent,
-    input="记住，我更倾向使用 Go，尽量避免 Node.js。",
-    identity=identity,
-)
-print(result.final_output)
-```
-
-在另一个 `session_id` 中继续使用同一 `user_id`，相关长期记忆会被检索并注入。
-
-## Session 与 Memory 的边界
+### Session 与 Memory 的边界
 
 ```text
 tenant_id
@@ -159,31 +133,22 @@ Memory Scope：
 {tenant_id}:{agent_id}:{user_id}
 ```
 
-如需多个 Agent 共享用户记忆，可以在构造 `MemoryScope` 时忽略 `agent_id`。
+## 当前阶段
 
-## 后台记忆提取
+已经完成：
 
-生产环境建议默认使用 `ExtractionMode.BACKGROUND`，由 `MemoryJobPublisher` 发布到 Redis Streams、Kafka 或任务队列。
+- Memory SDK 核心接口和 PostgreSQL 实现
+- Memory 提取、召回与 Context 注入骨架
+- Agent Studio Web 可交互产品原型
+- Python 与 Web CI 配置
 
-用户明确表达“记住”“以后都”“固定偏好”时，`MemoryRunner` 会自动改为同步提取，保证下一轮立即可用。
+下一阶段：
 
-## 当前边界
-
-MVP 暂不包含：
-
-- 管理控制台
-- Agent 发布与版本管理
-- Workflow/Team 编排
-- RAG/Knowledge Base
-- Redis Streams 的具体实现
-- PII 分类器和人工审核控制台
-- 数据库迁移框架
-
-这些能力应留在业务平台或独立扩展包，不进入轻量核心。
-
-## 官方基础能力
-
-本项目基于 OpenAI Agents SDK 已提供的 Session、SQLAlchemy Session、Responses Compaction、运行 Context、动态 Instructions 和 `call_model_input_filter` 扩展点构建。
+- 重构为标准 `packages/ + apps/` 目录
+- 实现 Control API
+- 实现 Runtime API 与 SSE
+- 用真实 Session 和 Memory 数据替换 Mock
+- 增加调试 Run Trace、Tool Call 与 Memory 审核
 
 ## License
 
