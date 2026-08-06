@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1785903052055,
+      "tag": "0000_silent_mastermind",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1785949582512,
+      "tag": "0001_glossy_true_believers",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1785954647692,
+      "tag": "0002_glamorous_multiple_man",
+      "breakpoints": true
+    }
+  ]
+}
